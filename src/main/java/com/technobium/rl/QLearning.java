@@ -1,4 +1,3 @@
-package com.technobium.rl;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -8,20 +7,19 @@ import java.util.Random;
 
 public class QLearning {
 
-    private final double alpha = 0.1; // Learning rate
+    public double alpha = 0.1; // Learning rate
     private final double gamma = 0.9; // Eagerness - 0 looks in the near future, 1 looks in the distant future
+    public double epsilon = 0.25; // Eagerness - 0 looks in the near future, 1 looks in the distant future
 
-    private final int mazeWidth = 3;
-    private final int mazeHeight = 3;
+    private final int mazeWidth = 4;
+    private final int mazeHeight = 4;
     private final int statesCount = mazeHeight * mazeWidth;
 
-    private final int reward = 100;
-    private final int penalty = -10;
+    private final int reward = 1;
 
-    private char[][] maze;  // Maze read from file
-    private int[][] R;       // Reward lookup
-    private double[][] Q;    // Q learning
-
+    private char[][] maze; // Maze read from file
+    private int[][] R; // Reward lookup
+    private double[][] Q; // Q learning
 
     public static void main(String args[]) {
         QLearning ql = new QLearning();
@@ -33,12 +31,11 @@ public class QLearning {
     }
 
     public void init() {
-        File file = new File("resources/maze.txt");
+        File file = new File("/Users/leemingi/Documents/CS/q-learning-java/src/main/java/com/technobium/rl/maze.txt");
 
         R = new int[statesCount][statesCount];
         Q = new double[statesCount][statesCount];
         maze = new char[mazeHeight][mazeWidth];
-
 
         try (FileInputStream fis = new FileInputStream(file)) {
 
@@ -69,9 +66,9 @@ public class QLearning {
                 i = k / mazeWidth;
                 j = k - i * mazeWidth;
 
-                // Fill in the reward matrix with -1
+                // Fill in the reward matrix with 0
                 for (int s = 0; s < statesCount; s++) {
-                    R[k][s] = -1;
+                    R[k][s] = 0;
                 }
 
                 // If not in final state or a wall try moving in all directions in the maze
@@ -82,11 +79,11 @@ public class QLearning {
                     if (goLeft >= 0) {
                         int target = i * mazeWidth + goLeft;
                         if (maze[i][goLeft] == '0') {
-                            R[k][target] = 0;
+                            R[k][target] = -1;
                         } else if (maze[i][goLeft] == 'F') {
                             R[k][target] = reward;
                         } else {
-                            R[k][target] = penalty;
+                            R[k][target] = -1;
                         }
                     }
 
@@ -95,11 +92,11 @@ public class QLearning {
                     if (goRight < mazeWidth) {
                         int target = i * mazeWidth + goRight;
                         if (maze[i][goRight] == '0') {
-                            R[k][target] = 0;
+                            R[k][target] = -1;
                         } else if (maze[i][goRight] == 'F') {
                             R[k][target] = reward;
                         } else {
-                            R[k][target] = penalty;
+                            R[k][target] = -1;
                         }
                     }
 
@@ -108,11 +105,11 @@ public class QLearning {
                     if (goUp >= 0) {
                         int target = goUp * mazeWidth + j;
                         if (maze[goUp][j] == '0') {
-                            R[k][target] = 0;
+                            R[k][target] = -1;
                         } else if (maze[goUp][j] == 'F') {
                             R[k][target] = reward;
                         } else {
-                            R[k][target] = penalty;
+                            R[k][target] = -1;
                         }
                     }
 
@@ -121,11 +118,11 @@ public class QLearning {
                     if (goDown < mazeHeight) {
                         int target = goDown * mazeWidth + j;
                         if (maze[goDown][j] == '0') {
-                            R[k][target] = 0;
+                            R[k][target] = -1;
                         } else if (maze[goDown][j] == 'F') {
                             R[k][target] = reward;
                         } else {
-                            R[k][target] = penalty;
+                            R[k][target] = -1;
                         }
                     }
                 }
@@ -136,19 +133,20 @@ public class QLearning {
             e.printStackTrace();
         }
     }
-    //Set Q values to R values
-    void initializeQ()
-    {
-        for (int i = 0; i < statesCount; i++){
-            for(int j = 0; j < statesCount; j++){
-                Q[i][j] = (double)R[i][j];
+
+    // Set Q values to R values
+    void initializeQ() {
+        for (int i = 0; i < statesCount; i++) {
+            for (int j = 0; j < statesCount; j++) {
+                Q[i][j] = 0;
             }
         }
     }
+
     // Used for debug
     void printR(int[][] matrix) {
         System.out.printf("%25s", "States: ");
-        for (int i = 0; i <= 8; i++) {
+        for (int i = 0; i <= 16; i++) {
             System.out.printf("%4s", i);
         }
         System.out.println();
@@ -164,28 +162,43 @@ public class QLearning {
 
     void calculateQ() {
         Random rand = new Random();
+        for (int j = 0; j < 10; j++) {
+            System.out.println("The total reward: for episode " + (1 + j));
+            initializeQ();
+            double iteration = 1;
+            for (int i = 0; i < 100; i++) { // Train cycles
+                // Select random initial state
+                int crtState = 12;
+                int totalReward = 0;
+                while (!isFinalState(crtState)) {
+                    int[] actionsFromCurrentState = possibleActionsFromState(crtState);
+                    int nextState;
+                    double pos = rand.nextDouble();
+                    if (pos >= epsilon) {
+                        nextState = getPolicyFromState(crtState);
+                    } else {
+                        int index = rand.nextInt(actionsFromCurrentState.length);
+                        nextState = actionsFromCurrentState[index];
+                    }
 
-        for (int i = 0; i < 1000; i++) { // Train cycles
-            // Select random initial state
-            int crtState = rand.nextInt(statesCount);
+                    double q = Q[crtState][nextState];
+                    double maxQ = maxQ(nextState);
+                    int r = R[crtState][nextState];
 
-            while (!isFinalState(crtState)) {
-                int[] actionsFromCurrentState = possibleActionsFromState(crtState);
-
-                // Pick a random action from the ones possible
-                int index = rand.nextInt(actionsFromCurrentState.length);
-                int nextState = actionsFromCurrentState[index];
-
-                // Q(state,action)= Q(state,action) + alpha * (R(state,action) + gamma * Max(next state, all actions) - Q(state,action))
-                double q = Q[crtState][nextState];
-                double maxQ = maxQ(nextState);
-                int r = R[crtState][nextState];
-
-                double value = q + alpha * (r + gamma * maxQ - q);
-                Q[crtState][nextState] = value;
-
-                crtState = nextState;
+                    double value = q + alpha * (r + gamma * maxQ - q);
+                    Q[crtState][nextState] = value;
+                    totalReward += r;
+                    if (crtState == nextState) {
+                        totalReward -= 1;
+                    }
+                    crtState = nextState;
+                    iteration++;
+                }
+                System.out.print(totalReward + " ");
+                // System.out.print(iteration + " ");
+                // System.out.printf("%.2f ", (totalReward / (double) iteration));
             }
+            System.out.println();
         }
     }
 
@@ -199,9 +212,20 @@ public class QLearning {
     int[] possibleActionsFromState(int state) {
         ArrayList<Integer> result = new ArrayList<>();
         for (int i = 0; i < statesCount; i++) {
-            if (R[state][i] != -1) {
+            if (R[state][i] != 0) {
                 result.add(i);
             }
+        }
+
+        // if corner
+        if (state == 3 || state == 12) {
+            result.add(state);
+            result.add(state);
+        }
+        if (state == 1 || state == 2 || state == 4 || state == 8 || state == 13 || state == 14 || state == 7
+                || state == 11) {
+            result.add(state);
+
         }
 
         return result.stream().mapToInt(i -> i).toArray();
@@ -209,13 +233,12 @@ public class QLearning {
 
     double maxQ(int nextState) {
         int[] actionsFromState = possibleActionsFromState(nextState);
-        //the learning rate and eagerness will keep the W value above the lowest reward
-        double maxValue = -10;
+        // the learning rate and eagerness will keep the W value above the lowest reward
+        double maxValue = 0;
         for (int nextAction : actionsFromState) {
             double value = Q[nextState][nextAction];
 
-            if (value > maxValue)
-                maxValue = value;
+            maxValue = Math.max(value, maxValue);
         }
         return maxValue;
     }
@@ -230,16 +253,18 @@ public class QLearning {
     int getPolicyFromState(int state) {
         int[] actionsFromState = possibleActionsFromState(state);
 
-        double maxValue = Double.MIN_VALUE;
+        double maxValue = -100;
         int policyGotoState = state;
 
         // Pick to move to the state that has the maximum Q value
         for (int nextState : actionsFromState) {
-            double value = Q[state][nextState];
+            if (nextState != state) {
+                double value = Q[state][nextState];
 
-            if (value > maxValue) {
-                maxValue = value;
-                policyGotoState = nextState;
+                if (value > maxValue) {
+                    maxValue = value;
+                    policyGotoState = nextState;
+                }
             }
         }
         return policyGotoState;
